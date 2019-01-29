@@ -52,14 +52,24 @@ sc.setLogLevel("ERROR")
 def splint(row):
     return np.array([float(x) for x in row.split()])
 
-centroids = sc.textFile(PATH_C1).map(splint).cache()
+centroids = sc.textFile(PATH_C1).map(splint).cache().collect()
+
+sc.textFile(DATA_PATH).map(splint).map()
+
+
+
 points = sc.textFile(DATA_PATH).map(splint).zipWithUniqueId().cache()
-if False:  # pickling error
+if True:  # pickling error
     cluster_assigner = lambda pt: find_closest_cluster(pt, centroids, euclid_dist)
     candidate_assignments = points.map(cluster_assigner)
     ass = candidate_assignments.take(5).collect()
 
 
+
+def save_text_file(rdd, path, overwrite=True):
+    if overwrite:
+        shutil.rmtree(path, ignore_errors=True)
+    rdd.repartition(1).saveAsTextFile(path)
 
 
 
@@ -92,11 +102,7 @@ new_c_attempt = crepr.reduceByKey(lambda x: x[-2].mean())
 # can like groupbykey.reduce top recompute centroids
 
 
+save_text_file(candidate_assignments, 'cluster_assignments')
+save_text_file(centroids, 'centroids')
 
-shutil.rmtree('cluster_assignments', ignore_errors=True)
-candidate_assignments.saveAsTextFile('cluster_assignments')
-
-
-shutil.rmtree('centroids', ignore_errors=True)
-centroids.saveAsTextFile('centroids')
 sc.stop()

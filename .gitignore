@@ -1,4 +1,5 @@
 .emacs.d
+metastore_db
 .DS_store
 .coverage
 .spark_history

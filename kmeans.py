@@ -12,6 +12,10 @@ K = 10
 import numpy as np
 
 
+conf = SparkConf()
+sc = SparkContext(conf=conf)
+sc.setLogLevel("ERROR")
+
 def euclid_dist(a,b):
     #if isinstance(a, list): a,b = np.array(a), np.array(b)
     return np.sqrt(np.sum((a - b)**2))
@@ -31,8 +35,21 @@ def add_dist_to_values(x) -> tuple:
 
 
 
+from pyspark.accumulators import AccumulatorParam
+class VectorAccumulatorParam(AccumulatorParam):
+     def zero(self, value):
+         return [0.0] * len(value)
+     def addInPlace(self, val1, val2):
+         val1[val2] +=1
+         return val1
+
+cluster_size = sc.accumulator([0] * K, VectorAccumulatorParam)
 def closer_cluster_chooser(c1, c2):
     return c1 if c1[-1] < c2[-1] else c2
+
+
+def splint(row):
+    return np.array([float(x) for x in row.split()])
 
 
 def find_closest_cluster(pt, clusters, dist_fn):
@@ -44,26 +61,14 @@ def find_closest_cluster(pt, clusters, dist_fn):
             best_id = i
             best_dist = dist
     assert best_id >= 0
-    return best_id
-
-conf = SparkConf()
-sc = SparkContext(conf=conf)
-sc.setLogLevel("ERROR")
-def splint(row):
-    return np.array([float(x) for x in row.split()])
-
-centroids = sc.textFile(PATH_C1).map(splint).cache().collect()
-
-sc.textFile(DATA_PATH).map(splint).map()
+    global cost
+    cost += dist
+    return (best_id ,pt)
 
 
-
-points = sc.textFile(DATA_PATH).map(splint).zipWithUniqueId().cache()
-if True:  # pickling error
-    cluster_assigner = lambda pt: find_closest_cluster(pt, centroids, euclid_dist)
-    candidate_assignments = points.map(cluster_assigner)
-    ass = candidate_assignments.take(5).collect()
-
+# def pt_sum(a, b):
+#     assert isinstance(a, list)
+#     return np.array(a) + np.array(b)
 
 
 def save_text_file(rdd, path, overwrite=True):
@@ -72,37 +77,43 @@ def save_text_file(rdd, path, overwrite=True):
     rdd.repartition(1).saveAsTextFile(path)
 
 
+import pickle
 
+
+def pickle_save(obj, path):
+    with open(path, 'wb') as f:
+        pickle.dump(obj, f)
+
+
+#def
+
+
+points = sc.textFile(DATA_PATH).map(splint)
+centroids = sc.textFile(PATH_C1).map(splint).cache().collect()
+orig_shape = np.array(centroids).shape
+print(f'ORIG shape: {orig_shape}')
+costs = []
+for k in range(MAX_ITER):
+    cost = sc.accumulator(0)
+    cluster_assigner = lambda pt: find_closest_cluster(pt, centroids, euclid_dist)
+    candidate_assignments = points.map(cluster_assigner)
+    gb = candidate_assignments.groupByKey()
+    new_centroids = gb.mapValues(lambda x: np.array(list(x)).mean(axis=1)).values().collect()
+    new_shape = np.array(centroids).shape
+    print()
+    if new_shape != orig_shape:
+        print(f'new shape: {new_shape}, orig_shape: {orig_shape} at iter {k}')
+        break
+
+    centroids = new_centroids
+
+    print('K', k)
+
+print(f'costs: {costs}')
 DESIRED_SHAPE = 4601
-
-candidate_assignments = points.cartesian(centroids)
-with_dists = candidate_assignments.map(add_dist_to_values)
-ass = with_dists.take(2)
+#save_text_file(costs, 'costs')
+pickle_save(centroids, 'centroids.pkl')
 
 
-
-best_cluster = with_dists.reduceByKey(closer_cluster_chooser)
-best_cluster.take(2)
-
-def centroid_repr(x):
-    return x[1]
-
-crepr = best_cluster.map(centroid_repr)
-new_cost = crepr.reduceByKey(lambda x: x[-1].sum())
-
-new_c_attempt = crepr.reduceByKey(lambda x: x[-2].mean())
-
-
-
-# cost fn
-#
-
-# ass[0]
-# closest_centroid
-# can like groupbykey.reduce top recompute centroids
-
-
-save_text_file(candidate_assignments, 'cluster_assignments')
-save_text_file(centroids, 'centroids')
 
 sc.stop()

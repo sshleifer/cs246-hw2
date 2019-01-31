@@ -8,6 +8,8 @@ niters = 40
 lr = .01
 m, n = (1683, 944)
 
+def l2_norm(x): return np.linalg.norm(x, ord=2)
+
 def calc_err(path, Q, P):
     seen_u = set()
     seen_m = set()
@@ -16,9 +18,10 @@ def calc_err(path, Q, P):
         u,i, rating = [int(x) for x in row.split()]
         seen_u.add(u)
         seen_m.add(i)
-        uperror.append(rating - Q[i].dot(P[u].T))
-    E = np.sum(uperror) + L * np.linalg.norm(P[list(seen_u)], ord=2) +  L * np.linalg.norm(Q[list(seen_m)], ord=2)
+        uperror.append((rating - Q[i].dot(P[u].T))**2)
+    E = np.sum(uperror) + L * l2_norm(P[list(seen_u)]) +  L * l2_norm(Q[list(seen_m)])
     return E
+
 
 Q = np.random.uniform(high=np.sqrt(5/k), size=(m, k))
 P = np.random.uniform(high=np.sqrt(5/k), size=(n, k))

@@ -16,16 +16,17 @@ R = np.array(ratings)
 m, n = R.shape
 
 P = np.diag(R.sum(1))
-Q = np.diag(R.sum(0));
+Q = np.diag(R.sum(0))
 
-assert P.shape == (m,m)
-assert Q.shape == (n,n)
+assert P.shape == (m, m)
+assert Q.shape == (n, n)
 
 QROOT = np.diag(1/np.sqrt(R.sum(0)))
 
 PROOT = np.diag(1/np.sqrt(R.sum(1)))
 
-gamma_user = R.T.dot(PROOT).dot(R).dot(R.T).dot(PROOT)
+SU = PROOT.dot(R).dot(R.T).dot(PROOT)
+SUR = SU.dot(R)
 
 gamma_item = R.dot(QROOT).dot(R.T).dot(R).dot(QROOT)
 
@@ -35,7 +36,7 @@ S = list(range(100))
 
 item_scores = gamma_item[ALEX_ID, S]
 
-user_scores = gamma_user[ALEX_ID, S]
+user_scores = SUR[ALEX_ID, S]
 
 def postprocess(scores):
     res = []
